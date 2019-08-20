@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: 'pvc-sql-data'
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: managed-premium
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: 'pvc-sql-system'
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: managed-premium
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: 'pvc-sql-log'
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: managed-premium
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mssql-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mssql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mssql
+    spec:
+      containers:
+      - name: mssql
+        image: 'mcr.microsoft.com/mssql/server:2017-2017-CU15-ubuntu'
+        ports:
+        - containerPort: 1433
+        env:
+        - name: ACCEPT_EULA
+          value: 'Y'
+        - name: MSSQL_DATA_DIR
+          value: '/data'
+        - name: MSSQL_LOG_DIR
+          value: '/log'
+        - name: SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mssql
+              key: SA_PASSWORD 
+        volumeMounts:
+        - name: mssql-system
+          mountPath: /var/opt/mssql
+        - name: mssql-data
+          mountPath: /data
+        - name: mssql-log
+          mountPath: /log
+      volumes:
+      - name: mssql-system
+        persistentVolumeClaim:
+          claimName: pvc-sql-system
+      - name: mssql-data
+        persistentVolumeClaim:
+          claimName: pvc-sql-data
+      - name: mssql-log
+        persistentVolumeClaim:
+          claimName: pvc-sql-log
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mssql-deployment
+spec:
+  selector:
+    app: mssql
+  ports:
+    - protocol: TCP
+      port: 31433
+      targetPort: 1433
+  type: LoadBalancer
